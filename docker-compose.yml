@@ -1,0 +1,117 @@
+services:
+  # ===========================================================================
+  # 1. BANCO DE DADOS: PostgreSQL com extensões analíticas
+  # ===========================================================================
+  db:
+    image: postgres:15-alpine
+    container_name: badass_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: lab_dados
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Scripts de inicialização: schema + dados base
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lab_dados"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lab-network
+
+  # ===========================================================================
+  # 2. ADMINISTRAÇÃO: pgAdmin para exploração visual
+  # ===========================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: badass_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@lab.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - lab-network
+
+  # ===========================================================================
+  # 3. GERADOR DE DADOS: Popula o banco com cenários realistas
+  # ===========================================================================
+  data-generator:
+    build: ./data-generator
+    container_name: badass_generator
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: lab_dados
+      DB_USER: postgres
+      DB_PASSWORD: root
+      # Configuráveis: quantidade de dados e "sujeira"
+      NUM_PROPERTIES: 1000
+      NUM_OWNERS: 500
+      NUM_TRANSACTIONS: 5000
+      NOISE_LEVEL: 0.15  # 15% de dados inconsistentes
+    volumes:
+      - ./data-generator/scripts:/app
+      - ./data:/data  # Exporta também para CSV/JSON se quiser
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - lab-network
+    # Roda uma vez e para; você reativa manualmente para regenerar
+    profiles: ["setup"]
+
+  # ===========================================================================
+  # 4. LABORATÓRIO: Jupyter com stack completo SQL + Pandas
+  # ===========================================================================
+  lab:
+    build: ./jupyter-custom
+    container_name: badass_jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_TOKEN: dados
+      JUPYTER_ENABLE_LAB: "yes"
+      # Conexão automática com Postgres
+      DATABASE_URL: postgresql://postgres:root@db:5432/lab_dados
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/home/jovyan/data  # Acesso aos dados gerados
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - lab-network
+
+  # ===========================================================================
+  # 5. CACHE: Redis para estudos de performance (Opcional)
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: badass_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - lab-network
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  redis_data:
+
+networks:
+  lab-network:
+    driver: bridge
