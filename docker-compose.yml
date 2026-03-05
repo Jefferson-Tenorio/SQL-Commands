@@ -3,24 +3,34 @@ services:
   # 1. BANCO DE DADOS: PostgreSQL com extensões analíticas
   # ===========================================================================
   db:
-    image: postgres:15-alpine
+    build: ./postgreconf
     container_name: badass_postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: root
       POSTGRES_DB: lab_dados
+      PGDATA: /var/lib/postgresql/data/pgdata  # <-- ADICIONE ESTA LINHA     
+    command: postgres -c logging_collector=off -c log_destination=stderr
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Scripts de inicialização: schema + dados base
       - ./init-scripts:/docker-entrypoint-initdb.d:ro
+      - postgres_log:/var/lib/postgresql/data/log
+
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d lab_dados"]
+      # Verifica se o servidor responde E se consegue executar query
+      test: >
+        bash -c "
+          pg_isready -U postgres -d lab_dados && 
+          psql -U postgres -d lab_dados -c 'SELECT 1' -q -t -A 2>/dev/null | grep -q '1'
+        "
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s  # Tempo extra para initdb + scripts
     networks:
       - lab-network
 
@@ -84,13 +94,13 @@ services:
       JUPYTER_TOKEN: dados
       JUPYTER_ENABLE_LAB: "yes"
       # Conexão automática com Postgres
-      DATABASE_URL: postgresql://postgres:root@db:5432/lab_dados
+      DATABASE_URL: postgresql://postgres:root@db:5432/lab_dados  # <-- CONFIRME QUE EXISTE!
     volumes:
       - ./notebooks:/home/jovyan/work
       - ./data:/home/jovyan/data  # Acesso aos dados gerados
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_healthy  # Só inicia quando db estiver 100% pronto
     networks:
       - lab-network
 
@@ -108,6 +118,7 @@ services:
       - lab-network
 
 volumes:
+  postgres_log:
   postgres_data:
   pgadmin_data:
   redis_data:
