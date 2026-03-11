@@ -60,27 +60,31 @@ services:
   data-generator:
     build: ./data-generator
     container_name: badass_generator
+    # ---------------------------------------------------------
+    # 🎯 A MÁGICA ACONTECE AQUI
+    # ---------------------------------------------------------
+    profiles: 
+      - setup   # Define que este serviço pertence ao perfil "setup"
+    
+    restart: "no" # IMPERATIVO: Data Generators rodam uma vez e morrem. Não use 'always'!
+    # ---------------------------------------------------------
+    
     environment:
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: lab_dados
       DB_USER: postgres
       DB_PASSWORD: root
-      # Configuráveis: quantidade de dados e "sujeira"
-      NUM_PROPERTIES: 1000
-      NUM_OWNERS: 500
-      NUM_TRANSACTIONS: 5000
-      NOISE_LEVEL: 0.15  # 15% de dados inconsistentes
+      # Variáveis do Script Caótico
+      NUM_CUSTOMERS: 1000
+      NUM_ORDERS: 5000
     volumes:
       - ./data-generator/scripts:/app
-      - ./data:/data  # Exporta também para CSV/JSON se quiser
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_healthy # Garante que o banco está pronto antes de tentar inserir
     networks:
       - lab-network
-    # Roda uma vez e para; você reativa manualmente para regenerar
-    profiles: ["setup"]
 
   # ===========================================================================
   # 4. LABORATÓRIO: Jupyter com stack completo SQL + Pandas
