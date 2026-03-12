@@ -15,11 +15,18 @@ NUM_PRODUCTS = int(os.getenv("NUM_PRODUCTS", 200))
 NUM_CUSTOMERS = int(os.getenv("NUM_CUSTOMERS", 1000))
 NUM_ORDERS = int(os.getenv("NUM_ORDERS", 3500))
 
-# Conexão (Substitua ou use Env Vars)
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_NAME = os.getenv("DB_NAME", "postgres")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASSWORD", "root")
+
+def require_env(key: str) -> str:
+    value = os.getenv(key)
+    if not value:
+        raise EnvironmentError(f"Variável de ambiente obrigatória não definida: {key}")
+    return value
+
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = require_env("POSTGRES_DB")
+DB_USER = require_env("POSTGRES_USER")
+DB_PASS = require_env("POSTGRES_PASSWORD")
 
 try:
     conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
